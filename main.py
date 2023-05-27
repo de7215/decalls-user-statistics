@@ -1,4 +1,3 @@
-import logging
 import os
 from collections import defaultdict
 from typing import List
@@ -6,14 +5,41 @@ from typing import List
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 from solana.rpc.api import Client
+from tabulate import tabulate
 
 from decalls_idl.accounts import UserStats
 from decalls_idl.program_id import PROGRAM_ID
 
-logging.basicConfig(level=logging.INFO)
-
+LAMPORT_PER_SOL = 1000000000
 GAMES_LIMIT = 30
 SECONDS_TO_HOURS = 1 / 3600
+
+
+def leaderboard(user_statistics: List[UserStats]):
+    """
+    Prints the leaderboard data for the provided user statistics.
+
+    Args:
+        user_statistics: A list of UserStats objects.
+    """
+    table_data = [
+        [
+            user.owner,
+            user.total_games,
+            round((winnings := round(user.total_winnings / LAMPORT_PER_SOL, 2))
+                  / (spent := round(user.total_prediction_funds / LAMPORT_PER_SOL, 2)), 2),
+            winnings - spent,
+            spent
+        ]
+        for user in user_statistics
+    ]
+
+    table_data.sort(key=lambda row: row[1], reverse=True)
+
+    total_volume = sum(row[4] for row in table_data)
+
+    print(f'\n        Players: {len(user_statistics)} Volume: {total_volume} Fees: {total_volume * 0.025}\n')
+    print(tabulate(table_data, headers=['Owner', 'Total Games', 'Ratio', 'Result', 'Volume'], showindex="always"))
 
 
 def get_user_statistic(client: Client) -> List[UserStats]:
@@ -94,5 +120,9 @@ load_dotenv()
 solana_endpoint: str = os.getenv('RPC_NODE', 'https://api.mainnet-beta.solana.com')
 
 solana_client: Client = Client(solana_endpoint)
+
 user_stats = get_user_statistic(solana_client)
+
+leaderboard(user_stats)
+
 combined_graph(user_stats)
